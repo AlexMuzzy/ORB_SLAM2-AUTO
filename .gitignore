@@ -3,3 +3,4 @@ log/
 build/
 image_tools/
 install/
+ORB_SLAM2-configuration/ORBvoc.txt
