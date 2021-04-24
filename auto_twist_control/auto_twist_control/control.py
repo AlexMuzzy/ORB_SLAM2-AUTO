@@ -28,21 +28,23 @@ class RobotControl(Node):
             'straight': 0,
             'right': -0.5,
             'far-right': -1.0
-
         }
 
-        self.logger.info('Initialising subscription for %s' %
-                         self.image_depth_sub_topic)
+        self.logger.info(
+            f'Initialising subscription for {self.image_depth_sub_topic}')
+
         self.depth_image_sub = self.create_subscription(
             Image, self.image_depth_sub_topic, self.depth_image_callback, qos_profile=qos_profile_sensor_data)
 
-        self.logger.info('Initialising subscription for %s' %
-                         self.image_optical_sub_topic)
+        self.logger.info(
+            f'Initialising subscription for {self.image_optical_sub_topic}')
+
         self.optical_image_sub = self.create_subscription(
             Image, self.image_optical_sub_topic, self.optical_image_callback, qos_profile=qos_profile_sensor_data)
 
-        self.logger.info('Initialising publisher for %s' %
-                         self.geometry_move_pub_topic)
+        self.logger.info(
+            f'Initialising publisher for {self.geometry_move_pub_topic}')
+
         self.control_publisher = self.create_publisher(
             Twist, self.geometry_move_pub_topic, 10)
 
