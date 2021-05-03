@@ -26,14 +26,24 @@ find_package(cv_bridge REQUIRED)
 find_package(message_filters REQUIRED)
 find_package(image_transport REQUIRED)
 find_package(OpenCV REQUIRED)
-find_package(PCL REQUIRED)
+find_package(PCL COMPONENTS REQUIRED)
 
-add_executable(pointcloud_mapper src/pointcloud_mapper.cpp)
+add_executable(pointcloud_mapper
+        src/pointcloud_mapper.cpp
+        )
 ament_target_dependencies(pointcloud_mapper
         OpenCV
         PCL
         rclcpp
         sensor_msgs
-        geometry_msgs)
+        cv_bridge
+        geometry_msgs
+        tf2_geometry_msgs
+        image_transport
+        message_filters)
 
+#FIND_LIBRARY(PCL_LIBRARIES PCL HINTS /usr/in)
+target_link_libraries(pointcloud_mapper ${PCL_LIBRARIES})
+
+install(TARGETS pointcloud_mapper DESTINATION lib/${PROJECT_NAME})
 ament_package()

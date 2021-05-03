@@ -33,7 +33,7 @@ If you built ORB_SLAM2 following the instructions provided in its repository, yo
 
 Then you can build this package
 
-    $ mkdir -p ws/src
+    $ mkdir -poseStampedTopic ws/src
     $ cd ws/src
     $ git clone https://github.com/alsora/ros2-ORB_SLAM2
     $ cd ..

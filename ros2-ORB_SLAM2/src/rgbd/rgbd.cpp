@@ -32,12 +32,12 @@ public:
         //Handling the RGB and Depth subscribers.
         subscriberRGB = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image >>(
                 shared_ptr<rclcpp::Node>(this),
-                subscriberRGBTopic,
+                RGBTopic,
                 rmw_qos_profile_sensor_data);
 
         subscriberDepth = std::make_shared<message_filters::Subscriber<sensor_msgs::msg::Image >>(
                 shared_ptr<rclcpp::Node>(this),
-                subscriberDepthTopic,
+                depthTopic,
                 rmw_qos_profile_sensor_data);
 
         syncApproximate = std::make_shared<message_filters::Synchronizer<approximate_sync_policy >>(
@@ -47,9 +47,15 @@ public:
 
         syncApproximate->registerCallback(&RgbdSlamNode::GrabRGBDImages, this);
 
+
+        publisherRGBImage = this->create_publisher<sensor_msgs::msg::Image>(
+                processedRGBTopic, rclcpp::SensorDataQoS());
+        publisherDepthImage = this->create_publisher<sensor_msgs::msg::Image>(
+                processedDepthTopic, rclcpp::SensorDataQoS());
         publisherPoseStamped = this->create_publisher<geometry_msgs::msg::PoseStamped>(
-                publisherPoseStampedTopic, 10);
-        publisherCameraPath = this->create_publisher<nav_msgs::msg::Path>(publisherCameraPathTopic, 10);
+                poseStampedTopic, rclcpp::SensorDataQoS());
+        publisherCameraPath = this->create_publisher<nav_msgs::msg::Path>(
+                cameraPathTopic, rclcpp::SensorDataQoS());
 
     }
 
@@ -106,36 +112,71 @@ private:
 
             geometry_msgs::msg::Pose transformPose;
 
+            // Set the orientation of the current keyframe transform.
             transformPose.orientation.w = quaternion.getW();
             transformPose.orientation.x = quaternion.getX();
             transformPose.orientation.y = quaternion.getY();
             transformPose.orientation.z = quaternion.getZ();
 
+            // Set the position of the current keyframe transform.
             transformPose.position.x = vector3.getX();
             transformPose.position.y = vector3.getY();
             transformPose.position.z = vector3.getZ();
 
+            // Get the roll, pitch and yaw from the given orbslam's produced quaternion.
             double roll, pitch, yaw;
             matrix3X3.getRPY(roll, pitch, yaw);  // Get the roll, pitch and yaw and pass it to the matrix.
 
             if (roll == 0 || pitch == 0 || yaw == 0) return;
 
-            // Establish the header for pose message.
-            std_msgs::msg::Header header;
-            header.frame_id = subscriberRGBTopic;
-            header.stamp = this->get_clock()->now();
+            // Set the time stamp for the new messages.
+            builtin_interfaces::msg::Time timeStamp = this->get_clock()->now();
 
+            // Establish the poseHeader for pose message.
+            std_msgs::msg::Header poseHeader;
+            poseHeader.frame_id = poseStampedTopic;
+            poseHeader.stamp = timeStamp;
+
+            // Set the header and the content of the pose message.
             geometry_msgs::msg::PoseStamped poseStampedMessage;
-            poseStampedMessage.header = header;
+            poseStampedMessage.header = poseHeader;
             poseStampedMessage.pose = transformPose;
 
+            // Establish the cameraHeader for the camera path message.
+            std_msgs::msg::Header cameraHeader;
+            cameraHeader.frame_id = cameraPathTopic;
+            cameraHeader.stamp = timeStamp;
+
+            // Set the camera message.
             nav_msgs::msg::Path cameraPath;
-            cameraPath.header = header;
+            cameraPath.header = cameraHeader;
             cameraPath.poses.push_back(poseStampedMessage);
-            publisherCameraPath->publish(cameraPath);  //Camera trajectory
+
+            // Establish the depthHeader for depth message.
+            std_msgs::msg::Header depthHeader;
+            depthHeader.frame_id = processedDepthTopic;
+            depthHeader.stamp = timeStamp;
+
+            // Set the depth message.
+            sensor_msgs::msg::Image depthImage = *messageDepth;
+            depthImage.header = depthHeader;
+
+            // Establish the rgbHeader for rgb image.
+            std_msgs::msg::Header rgbHeader;
+            rgbHeader.frame_id = processedRGBTopic;
+            rgbHeader.stamp = timeStamp;
+
+            // Set the RGB message.
+            sensor_msgs::msg::Image rgbImage = *messageRGB;
+            rgbImage.header = rgbHeader;
+
+            publisherCameraPath->publish(cameraPath);  //Camera trajectory.
             if (isKeyFrame) publisherPoseStamped->publish(poseStampedMessage);  //orbSlamCameraPose pose information
+            publisherRGBImage->publish(rgbImage);
+            publisherDepthImage->publish(depthImage);
+
         } else {
-            cout << "Twc is empty ..." << endl;
+            cout << "No new keyframe pose has been established." << endl;
         }
     }
 
@@ -145,10 +186,12 @@ private:
     cv_bridge::CvImageConstPtr cv_pointerDepth;
 
     // Topics
-    std::string subscriberRGBTopic = "camera/image_raw";
-    std::string subscriberDepthTopic = "camera/depth/image_raw";
-    std::string publisherPoseStampedTopic = "/stamped_pose";
-    std::string publisherCameraPathTopic = "/camera_path";
+    std::string RGBTopic = "camera/image_raw";
+    std::string depthTopic = "camera/depth/image_raw";
+    std::string processedRGBTopic = "orbslam/image_raw";
+    std::string processedDepthTopic = "orbslam/depth/image_raw";
+    std::string poseStampedTopic = "/stamped_pose";
+    std::string cameraPathTopic = "/camera_path";
 
     // Subscribers
     std::shared_ptr<message_filters::Subscriber<sensor_msgs::msg::Image>> subscriberRGB;
@@ -156,6 +199,8 @@ private:
     std::shared_ptr<message_filters::Synchronizer<approximate_sync_policy>> syncApproximate;
 
     // Publishers
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisherRGBImage;
+    rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisherDepthImage;
     rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr publisherPoseStamped;
     rclcpp::Publisher<nav_msgs::msg::Path>::SharedPtr publisherCameraPath;
 };
