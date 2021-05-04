@@ -23,6 +23,7 @@ class RobotControl(Node):
         self.show_image: bool = True
         self.bridge: object = CvBridge()
         self.logger = self.get_logger()
+        self.turning = False
 
         self.logger.info(
             f'Initialising subscription for {self.image_depth_sub_topic}')
@@ -60,8 +61,8 @@ class RobotControl(Node):
         self.control_publisher.publish(robot_direction)
 
     def display_cv_image(self, image: np.ndarray, window_title: str) -> None:
-        self.logger.debug('Displaying %s with dimensions: %s' %
-                          (window_title, ' '.join(map(str, image.shape))))
+        self.logger.debug(
+            f'Displaying {window_title} with dimensions: {image.shape}')
 
         cv2.imshow(window_title, image)
         cv2.waitKey(1)
@@ -83,31 +84,44 @@ class RobotControl(Node):
             raise e
 
     def calculate_movement(self, depth_array):
-        depth_array = depth_array[:, :, 0]
+        depth_array = depth_array[:, :, 0]  # Extract a single
         close_distance_mask = (
             depth_array < self.close_distance) & (depth_array > 0)
+
         robot_direction = Twist()
         # Checks if any single pixel is greater than the declared close distance.
+
+        # Check whether any pixels match the mask conditions.
         if depth_array[close_distance_mask].sum() > 0:
+            # Get X coordinate from every matched pixel.
             close_distance_indices = np.where(close_distance_mask)[1]
             x_coord_midpoint = round(depth_array.shape[1] / 2)
+
             close_distance_indices[(
                 close_distance_indices < x_coord_midpoint)] = -1
             close_distance_indices[(
                 close_distance_indices >= x_coord_midpoint)] = 1
-            # If robot is still moving, stop the robot.
+
             robot_direction.linear.x = 0.0
-            if close_distance_indices.sum() > 0:
-                direction = 'left'
-                robot_direction.angular.z = self.default_angular_speed
-            else:
-                direction = 'right'
-                robot_direction.angular.z = -self.default_angular_speed
-            self.logger.info('Obstacle detected. Turning %s at %f metres.' %
-                             (direction, self.default_angular_speed))
+            # If robot is still moving, stop the robot.
+
+            if not self.turning:  # If the robot has not started turning yet, turn.
+                if close_distance_indices.sum() > 0:  # Check whether to go left or right.
+                    self.turning = True
+                    direction = 'left'
+                    robot_direction.angular.z = self.default_angular_speed
+                else:
+                    self.turning = True
+                    direction = 'right'
+                    robot_direction.angular.z = -self.default_angular_speed
+
+                # Finally, log the direction the robot is turning.
+                self.logger.info(
+                    f'Obstacle detected. Turning {direction} at {self.default_angular_speed} metres.')
         else:
-            self.logger.info('Moving at %f metres forward.' %
-                             self.default_linear_speed)
+            self.turning = False
+            self.logger.info(
+                f'Moving at {self.default_linear_speed} metres forward.')
             # If robot is still turning, stop turning.
             robot_direction.angular.z = 0.0
             robot_direction.linear.x = self.default_linear_speed
@@ -118,13 +132,18 @@ def main(args=None):
     rclpy.init(args=args)
     robot_control = RobotControl()
     rclpy.spin(robot_control)
+
+    robot_control.destroy_node()
     # Destroy the node explicitly
     # (optional - otherwise it will be done automatically
     # when the garbage collector destroys the node object)
+
+    # On destruction of node, stop any kind of movement of robot.
     stop_movement = Twist()
     stop_movement.linear.x = 0
+    stop_movement.angular.z = 0
     robot_control.control_publisher.publish(stop_movement)
-    robot_control.destroy_node()
+
     rclpy.shutdown()
     cv2.destroyAllWindows()
 
