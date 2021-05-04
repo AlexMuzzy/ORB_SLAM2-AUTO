@@ -92,7 +92,6 @@ public:
 
     ~PointCloudMapper() override
     {
-        shutDownFlag = true;
         std::string save_path = "/home/alexmuzzy/resultPointCloudFile.pcd";
         pcl::io::savePCDFile(save_path, *globalMap);
         std::cout << "save pcd files to :  " << save_path << std::endl;
@@ -111,7 +110,7 @@ public:
         RCLCPP_INFO(this->get_logger(), "Keyframe received. Keyframe ID: " + std::to_string(globalPointCloudID));
     }
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr generatePointCloud(
+    pcl::PointCloud<pcl::PointXYZRGBA>::Ptr generatePointCloud(
         cv::Mat &color, cv::Mat &depth, Eigen::Isometry3d &T)
     {
 
@@ -129,18 +128,18 @@ public:
                 float d = depth.ptr<float>(m)[n] / depthMapFactor;
                 RCLCPP_INFO(this->get_logger(), "Depth value for " +
                                                     std::to_string(m) + ", " + std::to_string(n) + ": " + std::to_string(d));
-                if (d < 0.01 || d > 100)
+                if (d < minDepth || d > maxDepth)
                     continue;
-                PointT pointXyzrgba;
-                pointXyzrgba.z = d;
-                pointXyzrgba.x = ((float)n - cameraCx) * pointXyzrgba.z / cameraFx;
-                pointXyzrgba.y = ((float)m - cameraCy) * pointXyzrgba.z / cameraFy;
+                PointT pointXyzrgb;
+                pointXyzrgb.z = d;
+                pointXyzrgb.x = ((float)n - cameraCx) * pointXyzrgb.z / cameraFx;
+                pointXyzrgb.y = ((float)m - cameraCy) * pointXyzrgb.z / cameraFy;
 
-                pointXyzrgba.r = color.ptr<uchar>(m)[n * 3];
-                pointXyzrgba.g = color.ptr<uchar>(m)[n * 3 + 1];
-                pointXyzrgba.b = color.ptr<uchar>(m)[n * 3 + 2];
+                pointXyzrgb.r = color.ptr<uchar>(m)[n * 3];
+                pointXyzrgb.g = color.ptr<uchar>(m)[n * 3 + 1];
+                pointXyzrgb.b = color.ptr<uchar>(m)[n * 3 + 2];
 
-                temp->points.push_back(pointXyzrgba);
+                temp->points.push_back(pointXyzrgb);
             }
         }
 
@@ -184,20 +183,20 @@ public:
                     RCLCPP_INFO(this->get_logger(), "Size of depth images does not match colour images.");
                     continue;
                 }
-                pcl::PointCloud<PointT>::Ptr tem_cloud1(new pcl::PointCloud<PointT>());
+                localMap = pcl::PointCloud<PointT>::Ptr (new pcl::PointCloud<PointT>());
                 RCLCPP_INFO(
                     this->get_logger(), "i: " + std::to_string(i) + "  mvPosePointClouds.size(): " +
                                             std::to_string(mvGlobalPointCloudsPose.size()));
 
-                tem_cloud1 = generatePointCloud(colourImages[i], depthImages[i], mvGlobalPointCloudsPose[i]);
+                localMap = generatePointCloud(colourImages[i], depthImages[i], mvGlobalPointCloudsPose[i]);
 
-                if (tem_cloud1->empty())
+                if (localMap->empty())
                     continue;
                 RCLCPP_INFO(this->get_logger(), "Adding pointcloud " + std::to_string(i) + " to global map.");
-                *globalMap += *tem_cloud1;
+                *globalMap += *localMap;
 
                 sensor_msgs::msg::PointCloud2 local;
-                pcl::toROSMsg(*tem_cloud1, local);
+                pcl::toROSMsg(*localMap, local);
                 local.header.stamp = this->get_clock()->now();
                 local.header.frame_id = "world";
                 publisherLocalPointCloud->publish(local);
@@ -281,7 +280,7 @@ public:
         geometry_msgs::msg::PoseStamped>
         approximateSyncPolicy;
 
-    typedef pcl::PointXYZRGB PointT;
+    typedef pcl::PointXYZRGBA PointT;
 
     // Topic
     std::string pclViewerName = "ORB SLAM2 Viewer";
@@ -304,6 +303,10 @@ public:
     float cameraCy = 400.5;
     float resolution = 0.04;
     float depthMapFactor = 1.0;
+    float minDepth = 0.01;
+    float maxDepth = 10;
+
+    // Queue Buffer Size
     size_t queueSize = 10;
 
     pcl::VoxelGrid<PointT> voxel;
@@ -315,9 +318,6 @@ public:
     size_t globalPointCloudID = 0;
 
     size_t lastGlobalPointCloudID = 0;
-
-    // Shutdown constants
-    bool shutDownFlag = false;
 
     // Publishers
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisherLocalPointCloud;
