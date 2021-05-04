@@ -93,13 +93,10 @@ class RobotControl(Node):
         # Extract a single colour channel from depth image. Depth image is grey-scale so only a single colour channel
         # is necessary.
 
-        close_distance_mask = (
-                                      depth_array < self.close_distance) & (depth_array > 0)
-
+        close_distance_mask = (depth_array < self.close_distance) & (depth_array > 0)
         robot_direction = Twist()
-        # Checks if any single pixel is greater than the declared close distance.
 
-        # Check whether any pixels match the mask conditions.
+        # Checks if any single pixel is greater than the declared close distance.
         if depth_array[close_distance_mask].sum() > 0:
             # Get X coordinate from every matched pixel.
             close_distance_indices = np.where(close_distance_mask)[1]
@@ -117,7 +114,6 @@ class RobotControl(Node):
             if self.current_direction == 'forward':
                 # If the robot is going forward, decide on a new direction.
                 self.current_direction = 'left' if close_distance_indices.sum() > 0 else 'right'
-                # if close_distance_indices.sum() > 0:  # Check whether to go left or right.
 
             # Get the angular movement force from current direction given.
             robot_direction.angular.z = self.directions[self.current_direction]
@@ -129,6 +125,7 @@ class RobotControl(Node):
             self.current_direction = 'forward'
             self.logger.info(
                 f'Moving at {self.default_linear_speed} metres {self.current_direction}.')
+
             # If robot is still turning, stop turning.
             robot_direction.angular.z = 0.0
             robot_direction.linear.x = self.directions[self.current_direction]
