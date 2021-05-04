@@ -98,17 +98,17 @@ private:
 
         if (!orbSlamCameraPose.empty()) {
             //cv::Mat Twc =orbSlamCameraPose.inv();
-            //cv::Mat TWC=orbslam->mpTracker->mCurrentFrame.mTcw.inv();
-            cv::Mat RWC = orbSlamCameraPose.rowRange(0, 3).colRange(0, 3);
-            cv::Mat TWC = orbSlamCameraPose.rowRange(0, 3).col(3);
+            //cv::Mat cvOrientation=orbslam->mpTracker->mCurrentFrame.mTcw.inv();
+            cv::Mat cvRotation = orbSlamCameraPose.rowRange(0, 3).colRange(0, 3);
+            cv::Mat cvOrientation = orbSlamCameraPose.rowRange(0, 3).col(3);
 
-            tf2::Matrix3x3 matrix3X3(RWC.at<float>(0, 0), RWC.at<float>(0, 1), RWC.at<float>(0, 2),
-                                     RWC.at<float>(1, 0), RWC.at<float>(1, 1), RWC.at<float>(1, 2),
-                                     RWC.at<float>(2, 0), RWC.at<float>(2, 1), RWC.at<float>(2, 2));
-            tf2::Vector3 vector3(TWC.at<float>(0), TWC.at<float>(1), TWC.at<float>(2));
+            tf2::Matrix3x3 rotation(cvRotation.at<float>(0, 0), cvRotation.at<float>(0, 1), cvRotation.at<float>(0, 2),
+                                    cvRotation.at<float>(1, 0), cvRotation.at<float>(1, 1), cvRotation.at<float>(1, 2),
+                                    cvRotation.at<float>(2, 0), cvRotation.at<float>(2, 1), cvRotation.at<float>(2, 2));
+            tf2::Vector3 orientation(cvOrientation.at<float>(0), cvOrientation.at<float>(1), cvOrientation.at<float>(2));
 
             tf2::Quaternion quaternion;
-            matrix3X3.getRotation(quaternion); // Get matrix into quaternion form.
+            rotation.getRotation(quaternion); // Get matrix into quaternion form.
 
             geometry_msgs::msg::Pose transformPose;
 
@@ -119,15 +119,14 @@ private:
             transformPose.orientation.z = quaternion.getZ();
 
             // Set the position of the current keyframe transform.
-            transformPose.position.x = vector3.getX();
-            transformPose.position.y = vector3.getY();
-            transformPose.position.z = vector3.getZ();
+            transformPose.position.x = orientation.getX();
+            transformPose.position.y = orientation.getY();
+            transformPose.position.z = orientation.getZ();
 
             // Get the roll, pitch and yaw from the given orbslam's produced quaternion.
             double roll, pitch, yaw;
-            matrix3X3.getRPY(roll, pitch, yaw);  // Get the roll, pitch and yaw and pass it to the matrix.
-
-            if (roll == 0 || pitch == 0 || yaw == 0) return;
+            rotation.getRPY(roll, pitch, yaw);  // Get the roll, pitch and yaw and pass it to the matrix.
+            if (roll == 0 || pitch == 0 || yaw == 0) return; // Check whether empty values were parsed.
 
             // Set the time stamp for the new messages.
             builtin_interfaces::msg::Time timeStamp = this->get_clock()->now();
