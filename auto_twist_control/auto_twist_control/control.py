@@ -23,7 +23,12 @@ class RobotControl(Node):
         self.show_image: bool = True
         self.bridge: object = CvBridge()
         self.logger = self.get_logger()
-        self.turning = False
+        self.current_direction = 'forward'
+        self.directions = {
+            'left': self.default_angular_speed,
+            'right': -self.default_angular_speed,
+            'forward': self.default_linear_speed
+        }
 
         self.logger.info(
             f'Initialising subscription for {self.image_depth_sub_topic}')
@@ -84,9 +89,12 @@ class RobotControl(Node):
             raise e
 
     def calculate_movement(self, depth_array):
-        depth_array = depth_array[:, :, 0]  # Extract a single
+        depth_array = depth_array[:, :, 0]
+        # Extract a single colour channel from depth image. Depth image is grey-scale so only a single colour channel
+        # is necessary.
+
         close_distance_mask = (
-            depth_array < self.close_distance) & (depth_array > 0)
+                                      depth_array < self.close_distance) & (depth_array > 0)
 
         robot_direction = Twist()
         # Checks if any single pixel is greater than the declared close distance.
@@ -98,33 +106,32 @@ class RobotControl(Node):
             x_coord_midpoint = round(depth_array.shape[1] / 2)
 
             close_distance_indices[(
-                close_distance_indices < x_coord_midpoint)] = -1
+                    close_distance_indices < x_coord_midpoint)] = -1
             close_distance_indices[(
-                close_distance_indices >= x_coord_midpoint)] = 1
+                    close_distance_indices >= x_coord_midpoint)] = 1
+            # Assign values to whether the coordinate is on the left side or right side of frame.
 
             robot_direction.linear.x = 0.0
-            # If robot is still moving, stop the robot.
+            # If robot is still moving forward, stop the robot.
 
-            if not self.turning:  # If the robot has not started turning yet, turn.
-                if close_distance_indices.sum() > 0:  # Check whether to go left or right.
-                    self.turning = True
-                    direction = 'left'
-                    robot_direction.angular.z = self.default_angular_speed
-                else:
-                    self.turning = True
-                    direction = 'right'
-                    robot_direction.angular.z = -self.default_angular_speed
+            if self.current_direction == 'forward':
+                # If the robot is going forward, decide on a new direction.
+                self.current_direction = 'left' if close_distance_indices.sum() > 0 else 'right'
+                # if close_distance_indices.sum() > 0:  # Check whether to go left or right.
 
-                # Finally, log the direction the robot is turning.
-                self.logger.info(
-                    f'Obstacle detected. Turning {direction} at {self.default_angular_speed} metres.')
-        else:
-            self.turning = False
+            # Get the angular movement force from current direction given.
+            robot_direction.angular.z = self.directions[self.current_direction]
+
+            # Finally, log the direction the robot is turning.
             self.logger.info(
-                f'Moving at {self.default_linear_speed} metres forward.')
+                f'Obstacle detected. Turning {self.current_direction} at {self.default_angular_speed} metres.')
+        else:
+            self.current_direction = 'forward'
+            self.logger.info(
+                f'Moving at {self.default_linear_speed} metres {self.current_direction}.')
             # If robot is still turning, stop turning.
             robot_direction.angular.z = 0.0
-            robot_direction.linear.x = self.default_linear_speed
+            robot_direction.linear.x = self.directions[self.current_direction]
         return robot_direction
 
 
@@ -133,16 +140,16 @@ def main(args=None):
     robot_control = RobotControl()
     rclpy.spin(robot_control)
 
-    robot_control.destroy_node()
-    # Destroy the node explicitly
-    # (optional - otherwise it will be done automatically
-    # when the garbage collector destroys the node object)
-
-    # On destruction of node, stop any kind of movement of robot.
+    # Prior destruction of node, stop all movement.
     stop_movement = Twist()
     stop_movement.linear.x = 0
     stop_movement.angular.z = 0
     robot_control.control_publisher.publish(stop_movement)
+
+    robot_control.destroy_node()
+    # Destroy the node explicitly
+    # (optional - otherwise it will be done automatically
+    # when the garbage collector destroys the node object)
 
     rclpy.shutdown()
     cv2.destroyAllWindows()
