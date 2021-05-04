@@ -126,7 +126,7 @@ class RobotControl(Node):
             self.logger.info(
                 f'Moving at {self.default_linear_speed} metres {self.current_direction}.')
 
-            # If robot is still turning, stop turning.
+            # Ensure robot is only going forward.
             robot_direction.angular.z = 0.0
             robot_direction.linear.x = self.directions[self.current_direction]
         return robot_direction
