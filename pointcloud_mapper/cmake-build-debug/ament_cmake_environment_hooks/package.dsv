@@ -1,4 +1,0 @@
-source;share/pointcloud_mapper/local_setup.bash
-source;share/pointcloud_mapper/local_setup.dsv
-source;share/pointcloud_mapper/local_setup.sh
-source;share/pointcloud_mapper/local_setup.zsh
