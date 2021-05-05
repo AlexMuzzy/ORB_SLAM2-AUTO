@@ -30,7 +30,7 @@ find_package(ORB_SLAM2 REQUIRED)
 #ament_target_dependencies(mono rclcpp tf2_geometry_msgs nav_msgs geometry_msgs sensor_msgs cv_bridge ORB_SLAM2 Pangolin)
 
 add_executable(rgbd
-        src/rgbd/rgbd.cpp
+        src/ros2-orbslam2.cpp
         )
 
 ament_target_dependencies(rgbd rclcpp tf2_geometry_msgs nav_msgs geometry_msgs sensor_msgs cv_bridge ORB_SLAM2 Pangolin)
