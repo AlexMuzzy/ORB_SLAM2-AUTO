@@ -69,10 +69,7 @@ public:
                 localPointCloudTopic, rclcpp::SensorDataQoS());
 
         // Initialize PCL viewer.
-        FUpdate = false;
-        KFUpdate = false;
-        LoopCloserUpdate = false;
-        boolKeyFrameUpdate = false;
+        keyFrameUpdate = false;
         pclViewer = pcl::visualization::CloudViewer::Ptr(
             new pcl::visualization::CloudViewer(pclViewerName));
         globalMap = pcl::PointCloud<PointT>::Ptr(new pcl::PointCloud<PointT>);
@@ -100,12 +97,12 @@ public:
 
     void insertKeyFrame(cv::Mat &newColourImage, cv::Mat &newDepthImage, Eigen::Isometry3d &transform)
     {
-        mvGlobalPointCloudsPose.push_back(transform);
+        globalPointCloudsPose.push_back(transform);
         colourImages.push_back(newColourImage.clone());
         depthImages.push_back(newDepthImage.clone());
 
         globalPointCloudID++;
-        boolKeyFrameUpdate = true;
+        keyFrameUpdate = true;
 
         RCLCPP_INFO(this->get_logger(), "Keyframe received. Keyframe ID: " + std::to_string(globalPointCloudID));
     }
@@ -171,18 +168,13 @@ public:
 
     void updateViewer()
     {
-        KFUpdate = false;
-
-        N = mvGlobalPointCloudsPose.size();
-        KFUpdate = boolKeyFrameUpdate;
-        boolKeyFrameUpdate = false;
-
-        if (KFUpdate)
+        N = globalPointCloudsPose.size();
+        if (keyFrameUpdate)
         {
             for (i = lastKeyframeSize; i < N && i < (lastKeyframeSize + 5); i++)
             {
-                if ((mvGlobalPointCloudsPose.size() != colourImages.size()) ||
-                    (mvGlobalPointCloudsPose.size() != depthImages.size()) ||
+                if ((globalPointCloudsPose.size() != colourImages.size()) ||
+                    (globalPointCloudsPose.size() != depthImages.size()) ||
                     (depthImages.size() != colourImages.size()))
                 {
                     RCLCPP_INFO(this->get_logger(), "Size of depth images does not match colour images.");
@@ -191,9 +183,9 @@ public:
                 localMap = pcl::PointCloud<PointT>::Ptr(new pcl::PointCloud<PointT>());
                 RCLCPP_INFO(
                     this->get_logger(), "i: " + std::to_string(i) + "  mvPosePointClouds.size(): " +
-                                            std::to_string(mvGlobalPointCloudsPose.size()));
+                                            std::to_string(globalPointCloudsPose.size()));
 
-                localMap = generatePointCloud(colourImages[i], depthImages[i], mvGlobalPointCloudsPose[i]);
+                localMap = generatePointCloud(colourImages[i], depthImages[i], globalPointCloudsPose[i]);
 
                 if (localMap->empty())
                     continue;
@@ -211,9 +203,9 @@ public:
         int buff_length = 150;
         if ((int)i > (buff_length + 5))
         {
-            mvGlobalPointCloudsPose.erase(
-                mvGlobalPointCloudsPose.begin(),
-                mvGlobalPointCloudsPose.begin() + buff_length / 2);
+            globalPointCloudsPose.erase(
+                    globalPointCloudsPose.begin(),
+                    globalPointCloudsPose.begin() + buff_length / 2);
 
             depthImages.erase(depthImages.begin(), depthImages.begin() + buff_length);
             colourImages.erase(colourImages.begin(), colourImages.begin() + buff_length);
@@ -330,13 +322,9 @@ public:
 
     // data to generate point clouds
     std::vector<cv::Mat> colourImages, depthImages;
-    std::vector<pcl::PointCloud<PointT>::Ptr> mvGlobalPointClouds;
-    std::vector<Eigen::Isometry3d> mvGlobalPointCloudsPose;
+    std::vector<Eigen::Isometry3d> globalPointCloudsPose;
 
-    bool boolKeyFrameUpdate;
-    bool FUpdate;
-    bool KFUpdate;
-    bool LoopCloserUpdate;
+    bool keyFrameUpdate;
 
     size_t N = 0;
     size_t i = 0;
