@@ -114,24 +114,26 @@ public:
         cv::Mat &color, cv::Mat &depth, Eigen::Isometry3d &T)
     {
 
-        std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now(); // Get the current time.
+        std::chrono::steady_clock::time_point timePoint1 = std::chrono::steady_clock::now(); // Get the current time.
         pcl::PointCloud<PointT>::Ptr temp(new pcl::PointCloud<PointT>());
         // Given point cloud is null pointer.
 
         RCLCPP_INFO(this->get_logger(),
-                    "Generating pointcloud. Rows: " + std::to_string(depth.rows) +
+                    "Generating point-cloud. Rows: " + std::to_string(depth.rows) +
                         "Columns: " + std::to_string(depth.cols));
         for (int m = 0; m < depth.rows; m += 3)
         {
             for (int n = 0; n < depth.cols; n += 3)
             {
-                float d = depth.ptr<float>(m)[n] / depthMapFactor;
-                RCLCPP_INFO(this->get_logger(), "Depth value for " +
-                                                    std::to_string(m) + ", " + std::to_string(n) + ": " + std::to_string(d));
-                if (d < minDepth || d > maxDepth)
+                float depthPoint = depth.ptr<float>(m)[n] / depthMapFactor;
+                RCLCPP_DEBUG(this->get_logger(), "Depth value for " +
+                                                     std::to_string(m) + ", " +
+                                                     std::to_string(n) + ": " +
+                                                     std::to_string(depthPoint));
+                if (depthPoint <= minDepth || depthPoint > maxDepth)
                     continue;
                 PointT pointXyzrgb;
-                pointXyzrgb.z = d;
+                pointXyzrgb.z = depthPoint;
                 pointXyzrgb.x = ((float)n - cameraCx) * pointXyzrgb.z / cameraFx;
                 pointXyzrgb.y = ((float)m - cameraCy) * pointXyzrgb.z / cameraFy;
 
@@ -143,25 +145,28 @@ public:
             }
         }
 
-        pcl::PointCloud<PointT>::Ptr cloud_voxel_tem(new pcl::PointCloud<PointT>);
+        pcl::PointCloud<PointT>::Ptr tempVoxelCloud(new pcl::PointCloud<PointT>);
         temp->is_dense = false;
         voxel.setInputCloud(temp);
         voxel.setLeafSize(resolution, resolution, resolution);
-        voxel.filter(*cloud_voxel_tem);
+        voxel.filter(*tempVoxelCloud);
 
-        pcl::PointCloud<PointT>::Ptr cloud1(new pcl::PointCloud<PointT>);
-        pcl::transformPointCloud(*cloud_voxel_tem, *cloud1, T.matrix());
+        pcl::PointCloud<PointT>::Ptr newCloud(new pcl::PointCloud<PointT>);
 
-        std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
-        std::chrono::duration<double> time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1);
+        // Inverse the points given in the pointcloud to match the coordinate system given in the PCL viewer.
+        pcl::transformPointCloud(*tempVoxelCloud, *newCloud, T.inverse().matrix());
+
+        std::chrono::steady_clock::time_point timePoint2 = std::chrono::steady_clock::now();
+        std::chrono::duration<double> time_used =
+            std::chrono::duration_cast<std::chrono::duration<double>>(timePoint2 - timePoint1);
 
         RCLCPP_INFO(this->get_logger(),
-                    "generate point cloud from  kf-ID: " + std::to_string(lastGlobalPointCloudID) + ", size = " +
-                        std::to_string(cloud1->points.size()) + " cost time: " + std::to_string(time_used.count() * 1000) +
-                        " ms.");
+                    "generate point cloud from Key-Frame ID: " + std::to_string(lastGlobalPointCloudID) +
+                        ", Size = " + std::to_string(newCloud->points.size()) +
+                        " Time Taken: " + std::to_string(time_used.count() * 1000) + " ms.");
 
         lastGlobalPointCloudID++;
-        return cloud1;
+        return newCloud;
     }
 
     void updateViewer()
@@ -183,7 +188,7 @@ public:
                     RCLCPP_INFO(this->get_logger(), "Size of depth images does not match colour images.");
                     continue;
                 }
-                localMap = pcl::PointCloud<PointT>::Ptr (new pcl::PointCloud<PointT>());
+                localMap = pcl::PointCloud<PointT>::Ptr(new pcl::PointCloud<PointT>());
                 RCLCPP_INFO(
                     this->get_logger(), "i: " + std::to_string(i) + "  mvPosePointClouds.size(): " +
                                             std::to_string(mvGlobalPointCloudsPose.size()));
@@ -215,7 +220,7 @@ public:
 
             i = i - buff_length;
 
-            RCLCPP_INFO(this->get_logger(), "delete keyframe ....");
+            RCLCPP_INFO(this->get_logger(), "delete keyframe(s) ....");
         }
 
         lastKeyframeSize = i;
@@ -297,14 +302,14 @@ public:
     std::shared_ptr<message_filters::Synchronizer<approximateSyncPolicy>> syncApproximate;
 
     // Camera Calibration information
-    float cameraCx = 595.879;
-    float cameraFx = 595.879;
-    float cameraFy = 500.5;
-    float cameraCy = 400.5;
+    float cameraFx = 520.908620;
+    float cameraFy = 521.007327;
+    float cameraCx = 325.141442;
+    float cameraCy = 249.701764;
     float resolution = 0.04;
     float depthMapFactor = 1.0;
-    float minDepth = 0.01;
-    float maxDepth = 10;
+    float minDepth = 0.0;
+    float maxDepth = 20.0;
 
     // Queue Buffer Size
     size_t queueSize = 10;
