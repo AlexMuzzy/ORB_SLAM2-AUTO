@@ -84,7 +84,7 @@ private:
 
         // Copy the ros depth image message to cv::Mat.
         try {
-            cv_pointerDepth = cv_bridge::toCvShare(messageDepth);
+            cv_pointerDepth = cv_bridge::toCvShare(messageDepth, sensor_msgs::image_encodings::TYPE_32FC1);
         }
         catch (cv_bridge::Exception &e) {
             RCLCPP_ERROR(this->get_logger(), "cv_bridge exception: %s", e.what());
